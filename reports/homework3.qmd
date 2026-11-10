@@ -1,0 +1,311 @@
+---
+title: "STA 556 Homework 3 Analysis Report"
+author: "Madison Omelia"
+format: 
+    html:
+        code-fold: true
+jupyter: python3
+---
+
+**Part 1**
+
+**1.1 Introduction**
+
+When it comes to this analysis, I chose the watershed data set. The response variable (or the variable we are trying to predict) is the streamflow index. 
+The predictors for this analysis are going to be the normal snowpack percentage, precipitation (mm), and the mean temperature in degrees Celsius. The goal for this analysis is to fit and diagnose a linear model using matrix computations, 
+which is intended to predict the streamflow index given the stated predictors. 
+
+**1.2 Data Inspection and Validation**
+
+```{python}
+import pandas as pd
+
+watershed_df = pd.read_csv("./data/watershed.csv")
+
+```
+Inspect the watershed df after importing it in individual code chunks:
+
+Head:
+```{python}
+watershed_df.head()
+```
+Shape:
+```{python}
+shape = watershed_df.shape
+shape
+```
+Data Types: 
+```{python}
+watershed_df.dtypes
+```
+Amount of NA values in each column:
+```{python}
+watershed_df.isna().sum()
+```
+Test to see if all id values are unique:
+```{python}
+watershed_df["id"].is_unique
+```
+Based on the shape which is `{python} shape`, there are `{python} shape[0]` observations and `{python} shape[1]` variables: id, snowpack_pct_normal, precip_mm, mean_temp_c, and streamflow_index.There are no missing values or NA values. Lastly, every id is unique. 
+
+**Part 2**
+
+**Matrix Setup and Standardization**
+
+Convert the predictors and response to NumPy arrays.
+```{python}
+predictors = watershed_df[
+    ["snowpack_pct_normal", 
+    "precip_mm", 
+    "mean_temp_c"]].to_numpy()
+
+y = watershed_df["streamflow_index"].to_numpy()
+```
+Standardize the Predictors:
+```{python}
+import numpy as np
+
+means = predictors.mean(axis=0)
+
+sds = predictors.std(axis=0)
+
+Z = (
+predictors - means
+) / sds
+
+print(Z.mean(axis=0))
+print(Z.std(axis=0))
+```
+Construct the design matrix:
+```{python}
+X = np.column_stack([
+np.ones(len(Z)),
+Z
+])
+```
+
+Shapes of predictors, Z, X, and y:
+```{python}
+predictors_shape = predictors.shape
+predictors_shape
+```
+
+```{python}
+Z_shape = Z.shape
+Z_shape
+```
+```{python}
+X_shape = X.shape
+X_shape
+```
+```{python}
+y_shape = y.shape
+y_shape
+```
+Matrix Rank of X: 
+```{python}
+rank_X = np.linalg.matrix_rank(X)
+rank_X
+```
+Number of predictors (not including the intercept):
+```{python}
+number_pred = predictors_shape[1]
+number_pred
+```
+
+When using the least squares method to predict the streamflow index, the response vector y needs to have compatible shapes with X because X will multiply with a beta_hat vector.
+When doing matrix computations, your dimensions matter so, y has a shape of `{python} y_shape` (where `{python} y_shape[0]` is the number of observations) and X has a shape of `{python} X_shape` (where `{python} X_shape[0]` is the number of observations and `{python} X_shape[1]` is the number of predictors (including the intercept)) so our beta_hat should have a shape of (`{python} X_shape[1]`,).
+When it comes to the intercept column in the design matrix (X), it is important to include because when computing the beta_hat matrix, if no intercept column is computed, no beta_0 coefficient will be computed. 
+Standardizing the predictors helps reduce multicollinearity between one another, makes every predictor have a mean of 0 and a standard deviation of 1, and makes the predictors more comparable since they are all on the same scale.
+Broadcasting makes this standardization possible because it allows our code to work with the whole numpy array at once and apply different operations using other numpy arrays that have a compatible shape. 
+So when standardzing the predictors, broadcasting the mean to be subtracted from the predictors and then using broadcasting to divide this difference by the standard deviation, allows for a faster more efficient way to standarize predictors without using a Python loop (which could take longer).
+
+**Part 3**
+
+**Least Squares**
+
+Fit the model: 
+```{python}
+beta_hat, *_ = np.linalg.lstsq(
+X,
+y,
+rcond=None
+)
+```
+Report the estimated coefficients:
+
+```{python}
+beta_hat
+```
+Due to the standardization of the predictors, the estimated intercept is `{python} beta_hat[0]`, the estimated coefficient for each standardized predictor is as follows: percentage of normal snowpack: `{python} beta_hat[1]`, precipitation :`{python} beta_hat[2]`,
+mean temperature: `{python} beta_hat[3]`. The standardized predictor that has the largest estimated coefficient (in absolute value) is the percentage of normal snowpack. 
+
+Calculate fitted values and residuals:
+```{python}
+
+fitted = X @ beta_hat
+residuals = y- fitted
+```
+Calculate the mean of the residuals:
+```{python}
+residuals.mean()
+```
+The mean of the residuals is `{python} residuals.mean()`.
+
+Calculate the root mean squared error (RMSE):
+```{python}
+rmse = np.sqrt(
+np.mean(
+residuals ** 2
+))
+```
+The RMSE is `{python} rmse`.
+
+
+X @ beta_hat represents the matrix multiplication between the design matrix X and the estimated coefficients for the intercept and predictors. 
+Due to how least squares computes estimates for coefficients of predictors, when you take the partial derivative with respect to beta_0 of the sum of squared errors and set it to 0 (to minimize it), the math works out to where the sum of residuals = 0. 
+Then, when you take the mean of the residuals (sum of residuals/n), it should in theory equal 0 since the sum of residuals should be approximately equal to 0. 
+The RMSE summarizes the size of prediction errors (on average) and penalizes the larger errors (due to squaring large residuals). 
+Lastly, X * beta_hat computes element wise multiplcation between the two matrices (which is not correct) so in order to correctly muliply X and beta_hat,
+you need to do X @ beta_hat which does a dot product of the entries in the row with the entries of a column, that dot product becomes the entry for the resulting matrix. 
+
+**Part 5**
+
+**QR, SVD, and conditioning**
+
+**QR Decomposition**
+
+Compute QR decomposition:
+```{python}
+Q, R = np.linalg.qr(X)
+```
+
+Report the shapes of Q and R:
+```{python}
+Q_shape = Q.shape
+```
+The shape of Q is `{python} Q_shape`.
+
+```{python}
+R_shape = R.shape
+```
+The shape of R is `{python} R_shape`.
+
+Verify:
+```{python}
+np.allclose(
+Q @ R,
+X
+)
+```
+and: 
+```{python}
+np.allclose(
+Q.T @ Q,
+np.eye(Q.shape[1])
+)
+```
+**SVD**
+
+Compute: 
+```{python}
+U, s, Vt = np.linalg.svd(
+X,
+full_matrices=False
+)
+```
+
+Shapes of U, s, and Vt (respectively):
+
+```{python}
+U_shape = U.shape
+```
+The shape of U is `{python} U_shape`.
+
+```{python}
+s_shape = s.shape
+```
+The shape of s is `{python} s_shape`.
+
+```{python}
+Vt_shape = Vt.shape
+```
+The shape of Vt is `{python} Vt_shape`.
+
+Singular Values: 
+```{python}
+s
+```
+The singular values are `{python} s`.
+
+Reconstruct X:
+
+```{python}
+X_reconstructed = (
+U
+@ np.diag(s)
+@ Vt
+)
+```
+Verify:
+```{python}
+np.allclose(
+X_reconstructed,
+X
+)
+```
+
+**Rank and Conditioning**
+
+```{python}
+rank = np.linalg.matrix_rank(X)
+condition_num = np.linalg.cond(X)
+```
+The rank of X is `{python} rank` and the condition number of X is `{python} condition_num`. 
+
+Construct the raw, unstandardized design matrix:
+
+```{python}
+X_raw = np.column_stack([
+np.ones(len(predictors)),
+predictors
+])
+```
+```{python}
+X_raw_cond = np.linalg.cond(X_raw)
+```
+
+The condition number of the raw, unstandardized design matrix is `{python} X_raw_cond`. 
+
+The reason why we should verify that Q @ R should approximately equal X is because Q is a matrix with orthonormal columns and R is an upper triangular matrix. 
+When Q and R are mulitplied through matrix multiplcation, we should be getting back our original design matrix, if we do not, that could mean the QR decomposition was not done correctly and is not preserving all the information in the original design matrix.
+In order to check that Q is orthonormal, we need to verify that Q.t @ Q approximately equals I, if it does than Q is orthonormal. 
+When it comes to singular values, they are returned from largest to smallest. The large values are indicative of strong directions in the matrix and the small values are indicative of weak directions in the matrix.
+A large condition number means can indicate that the design matrix might be difficult to work with because the data is sensitive to changes (meaning small changes to the data can effect the resulst signficicantly),
+this can be seen in design matrices that have linear dependent predictors. 
+In this analysis, when comparing the condition number for the raw design matrix (X_raw) and the standardized design matrix (X), the condition number for the raw design matrix was `{python} X_raw_cond` and the condition number for the standardized design matrix was `{python} condition_num`, which is a major decrease after standardization.
+When it comes to the raw condition number, measurement scale matters because different predictors are measured on different scales (in the case of this analysis, the predictors are measured in percentages, mm, and degrees Celsius), 
+without standardization, the condition number could be inflated since each predictor (or column) has different scales, since the condition number is calculated using the largest singular value and dividing it by the smallest singular value.
+Based on the condition of the standardized design matrix, which is `{python} condition_num`, this is a pretty small condition number which means it is not likely that there is sever near-redudnancy in predictors in the standardized design matrix.
+
+**Part 5**
+
+**Reproducibility and Numerical-Computing Reflection**
+
+When working on a computational report, having a clean execution matters because you want your report to be reproducible, professional, and helps others understand your analysis.
+One way to have clean execution is to not write reusable code in a hidden notebook state.
+Having reusable code in a hidden notebook state can be confusing or make it hard to troubleshoot your code for people reading your computational report.
+This is because the reusable code that would be referenced in the computational report would not be explicitly stated in the computational report so if someone just had your computational report, the ability to troubleshoot and have a readable, reproducible report decreases. 
+
+When it comes to having an analysis that has efficient code, when trying to find least squares estimators, using np.linalg.lstsq() is preferable because it uses optimized numpy operations and stable algorithms that directly apply to the whole numpy arrays. 
+This is preferable when compared to doing the matrix computation "by-hand" because that method computes all of the matrix multiplication "by-hand" and can take a longer time.
+When it comes to QR decomposition and SVD reconstruction, using checks like np.allclose() is preferable to exact equality because there is rounding involved when calculating the QR decomposition and the SVD reconstruction.
+If we used exact equality, we are most likely going to get False so using checks like np.allclose() checks if our QR decomposition or SVD reconstruction are close to the values they need to be (within a range that allows for rounding errors from calculations).
+When learning about the condition number that is related to SVD reconstruction, I learned that standardizing the design matrix can help with fixing a linear model that has linearly dependent predictors, unstable coefficient estimates, and sensitivity to changes, which are all associated with large condition numbers.  
+Standardizing also helps with predictors of different scales, these predictors with different scales can artificially inflate the condition number so standardizing puts them all at the same scale. 
+When the predictors are all on the same scale (after being standardized), their estimated coefficients are more comparable. 
+
+When it comes to reproducibility in this report, I think one thing that I will carry into the final project is not manually referencing code. 
+I think this is really helpful because if I make changes to my code (but it is still assigned to the same variable), my writing is going to be updated since I am referencing the code in my writing instead of manually writing the result. 
+I also liked having the setting code-fold: true in the beginning of the quarto markdown because in my html, if someone needs to see the code, they can see it but if they don't want/need to, it can be collapsed so it isn't taking up a majority of the report.
+This has also been helpful with troubleshooting on my end when using the preview command because when writing in quarto markdown it can be hard to see where I have made mistakes so if I need to see my code and what I need to trouble shoot, having the code easily accessible is nice and makes my report more reproducible. 
